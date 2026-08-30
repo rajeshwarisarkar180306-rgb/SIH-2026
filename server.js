@@ -64,7 +64,7 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });
 });
 
-// 2. Submit Problem / Challenge
+// 2. Submit Problem / Challenge (Citizen Flow)
 app.post('/api/problems', async (req, res) => {
   try {
     const { title, description, location } = req.body;
@@ -77,7 +77,6 @@ app.post('/api/problems', async (req, res) => {
     const aiResult = await classifyProblemText(`${title} ${fullDescription}`);
     const heiUUID = isValidUUID(aiResult.assigned_hei_id) ? aiResult.assigned_hei_id : null;
 
-    // Schema payload - lets Supabase apply the table's default status
     const payload = {
       title,
       description: fullDescription,
@@ -109,7 +108,7 @@ app.post('/api/problems', async (req, res) => {
   }
 });
 
-// 3. Fetch Challenges (For HEI Portal & Citizen Dashboard)
+// 3. Fetch Challenges (HEI Portal, Citizen Dashboard, & Feed)
 app.get('/api/problems', async (req, res) => {
   try {
     const { hei_id, category, status } = req.query;
@@ -125,6 +124,80 @@ app.get('/api/problems', async (req, res) => {
     res.status(200).json({ problems: data });
   } catch (err) {
     console.error('Fetch Error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// 4. Update Problem Status & Assignment
+app.patch('/api/problems/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, assigned_hei_id } = req.body;
+
+    if (!isValidUUID(id)) {
+      return res.status(400).json({ error: 'Invalid problem ID format' });
+    }
+
+    const updatePayload = {};
+    if (status) updatePayload.status = status;
+    if (assigned_hei_id && isValidUUID(assigned_hei_id)) {
+      updatePayload.assigned_hei_id = assigned_hei_id;
+    }
+
+    const { data, error } = await supabase
+      .from('challenges')
+      .update(updatePayload)
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Problem not found' });
+    }
+
+    res.status(200).json({ message: 'Status updated successfully', data: data[0] });
+  } catch (err) {
+    console.error('Status Update Error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// 5. Submit Solution Proposal (HEI / Student Proposal Flow)
+app.post('/api/problems/:id/solutions', async (req, res) => {
+  try {
+    const { id: problem_id } = req.params;
+    const { abstract, proposal_text, description, hei_lead_id, hei_id, budget_requested, estimated_budget } = req.body;
+
+    if (!isValidUUID(problem_id)) {
+      return res.status(400).json({ error: 'Invalid problem ID format' });
+    }
+
+    const proposalAbstract = abstract || proposal_text || description;
+    if (!proposalAbstract) {
+      return res.status(400).json({ error: 'Proposal abstract/description is required' });
+    }
+
+    const leadId = hei_lead_id || hei_id;
+    const budget = budget_requested || estimated_budget;
+
+    const payload = {
+      challenge_id: problem_id,
+      abstract: proposalAbstract,
+      hei_lead_id: isValidUUID(leadId) ? leadId : null,
+      budget_requested: budget ? Number(budget) : null,
+      status: 'submitted'
+    };
+
+    const { data, error } = await supabase
+      .from('proposals')
+      .insert([payload])
+      .select();
+
+    if (error) throw error;
+
+    res.status(201).json({ message: 'Solution proposal submitted successfully', data: data[0] });
+  } catch (err) {
+    console.error('Solution Submission Error:', err);
     res.status(500).json({ error: err.message || 'Server error' });
   }
 });
