@@ -32,30 +32,54 @@ function isValidUUID(str) {
   return uuidRegex.test(str);
 }
 
+// Built-in rule-based fallback classifier (Prevents 500 errors if Python environment is unavailable)
+function keywordFallbackClassifier(text) {
+  const lower = text.toLowerCase();
+  
+  if (lower.includes('road') || lower.includes('pothole') || lower.includes('bridge') || lower.includes('traffic') || lower.includes('drain')) {
+    return { category: 'Urban Infrastructure', assigned_hei_id: null, confidence_score: 0.85 };
+  }
+  if (lower.includes('water') || lower.includes('leak') || lower.includes('pipeline') || lower.includes('sewage')) {
+    return { category: 'Water & Sanitation', assigned_hei_id: null, confidence_score: 0.88 };
+  }
+  if (lower.includes('light') || lower.includes('power') || lower.includes('electric') || lower.includes('solar') || lower.includes('energy')) {
+    return { category: 'Energy & Power Systems', assigned_hei_id: null, confidence_score: 0.90 };
+  }
+  if (lower.includes('waste') || lower.includes('garbage') || lower.includes('trash') || lower.includes('pollution')) {
+    return { category: 'Waste Management', assigned_hei_id: null, confidence_score: 0.82 };
+  }
+  
+  return { category: 'General Public Works', assigned_hei_id: null, confidence_score: 0.60 };
+}
+
 function classifyProblemText(text) {
   return new Promise((resolve) => {
-    const sanitized = text.replace(/"/g, '\\"');
-    const scriptPath = getClassifierPath();
+    try {
+      const sanitized = text.replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+      const scriptPath = getClassifierPath();
 
-    exec(`python "${scriptPath}" "${sanitized}"`, (err, stdout, stderr) => {
-      if (err) {
-        return resolve({
-          category: "General Public Works",
-          assigned_hei_id: null,
-          confidence_score: 0.50
-        });
+      if (!fs.existsSync(scriptPath)) {
+        console.warn(`[AI Warning] Classifier script not found at ${scriptPath}. Using keyword fallback.`);
+        return resolve(keywordFallbackClassifier(text));
       }
-      try {
-        const parsed = JSON.parse(stdout.trim());
-        resolve(parsed);
-      } catch (e) {
-        resolve({
-          category: "General Public Works",
-          assigned_hei_id: null,
-          confidence_score: 0.50
-        });
-      }
-    });
+
+      exec(`python "${scriptPath}" "${sanitized}"`, { timeout: 5000 }, (err, stdout, stderr) => {
+        if (err || stderr) {
+          console.warn('[AI Warning] Python execution failed or timed out. Falling back to rule-based routing.');
+          return resolve(keywordFallbackClassifier(text));
+        }
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          resolve(parsed);
+        } catch (e) {
+          console.warn('[AI Warning] Failed to parse Python output. Falling back.');
+          resolve(keywordFallbackClassifier(text));
+        }
+      });
+    } catch (criticalErr) {
+      console.error('[AI Critical] Error in classify handler:', criticalErr);
+      resolve(keywordFallbackClassifier(text));
+    }
   });
 }
 
@@ -184,8 +208,7 @@ app.post('/api/problems/:id/solutions', async (req, res) => {
       challenge_id: problem_id,
       abstract: proposalAbstract,
       hei_lead_id: isValidUUID(leadId) ? leadId : null,
-      budget_requested: budget ? Number(budget) : null,
-      status: 'submitted'
+      budget_requested: budget ? Number(budget) : null
     };
 
     const { data, error } = await supabase
