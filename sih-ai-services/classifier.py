@@ -11,7 +11,6 @@ HEI_ROUTING_MAP = {
     "Environmental & Waste": "HEI_NIT_RANCHI_ENV"
 }
 
-# Rich category dictionary with primary keywords
 CATEGORY_MAPPINGS = {
     "Water & Sanitation": [
         "water", "drainage", "sewage", "river", "pipe", "leakage", "pipeline", "contamination", "tanker"
