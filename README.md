@@ -54,16 +54,6 @@ Pattern detection (same similarity technique, applied over time + location)
 | AI/NLP | Whisper, Sentence Transformers | Speech-to-text and embedding generation for duplicate/pattern detection |
 | Deployment | Vercel (frontend), Render (backend/AI) | Free-tier friendly, quick CI/CD |
 
-## Current status
-
-This is a hackathon prototype. Honest scope as of submission:
-
-- [x] System architecture and data flow designed
-- [x] UI mockups for citizen reporting flow
-- [ ] Duplicate detection — rule-based placeholder; ML-based embedding similarity in progress
-- [ ] Recurring-pattern detection — logic designed, not yet implemented
-- [ ] University/mentor matching — currently coordinator-based (problems routed to a university's registered coordinator, who assigns internally); automated student-level matching is a future goal, not current scope
-- [ ] CSR/funding milestone tracking — designed, not yet built
 
 ## Team
 
